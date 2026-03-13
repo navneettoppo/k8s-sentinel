@@ -1,0 +1,173 @@
+# K3s-Sentinel Configuration Example
+# Copy this file to config.yaml and customize
+
+# ============================================
+# LLM Provider Configuration
+# ============================================
+llm:
+  # Provider: openai, anthropic, gemini, azure_openai, ollama, local, custom
+  provider: "openai"
+
+  # API Key (can also be set via LLM_API_KEY environment variable)
+  api_key: ""
+
+  # Model to use
+  model: "gpt-4"
+
+  # Optional parameters
+  temperature: 0.7
+  max_tokens: 2000
+
+  # Provider-specific settings:
+
+  # For Azure OpenAI:
+  # azure_endpoint: "https://your-resource.openai.azure.com/"
+  # azure_api_version: "2024-02-01"
+
+  # For Ollama:
+  # ollama_base_url: "http://localhost:11434"
+
+  # For Custom (OpenAI-compatible APIs):
+  # custom_base_url: "https://api.example.com/v1"
+
+  # For Local models:
+  # local_model_path: "microsoft/Phi-3-mini-4k-instruct"
+  # local_device: "auto"
+
+  # Fallback providers (if primary fails)
+  fallback_providers:
+    - provider: "anthropic"
+      api_key: ""
+      model: "claude-3-haiku-20240307"
+
+  # System prompt for LLM
+  system_prompt: "You are a Kubernetes expert helping with root cause analysis. Analyze cluster issues and identify root causes with evidence and suggested fixes."
+
+# ============================================
+# Alert Configuration
+# ============================================
+alerts:
+  # Enable/disable alerting
+  enabled: true
+
+  # Minimum severity to alert (debug, info, warning, error, critical)
+  min_severity: "warning"
+
+  # Rate limiting (seconds)
+  alert_cooldown_seconds: 300
+  max_alerts_per_hour: 100
+
+  # Custom Webhook (generic)
+  webhook_enabled: false
+  webhook_url: "https://your-webhook.com/alerts"
+  webhook_headers:
+    Authorization: "Bearer token"
+
+  # Slack
+  slack_enabled: false
+  slack_webhook_url: "https://hooks.slack.com/services/..."
+  slack_channel: "#alerts"
+  slack_username: "K3s-Sentinel"
+
+  # Microsoft Teams
+  teams_enabled: false
+  teams_webhook_url: "https://outlook.office.com/webhook/..."
+
+  # Email/SMTP
+  email_enabled: false
+  email_smtp_host: "smtp.gmail.com"
+  email_smtp_port: 587
+  email_use_tls: true
+  email_username: "your-email@gmail.com"
+  email_password: "your-password"
+  email_from: "alerts@example.com"
+  email_to:
+    - "admin@example.com"
+    - "oncall@example.com"
+
+  # Telegram
+  telegram_enabled: false
+  telegram_bot_token: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+  telegram_chat_id: "123456789"
+  telegram_parse_mode: "Markdown"
+
+  # Grafana
+  grafana_enabled: false
+  grafana_url: "https://grafana.example.com"
+  grafana_api_key: "your-grafana-api-key"
+  grafana_annotation_tags:
+    - "k3s-sentinel"
+    - "rca"
+  # grafana_dashboard_id: "dashboard-123"
+
+  # Prometheus Alertmanager
+  prometheus_enabled: false
+  prometheus_url: "http://prometheus:9093"
+  prometheus_alert_labels:
+    source: "k3s-sentinel"
+    team: "platform"
+
+  # PagerDuty
+  pagerduty_enabled: false
+  pagerduty_integration_key: "your-pagerduty-integration-key"
+
+  # OpsGenie
+  opsgenie_enabled: false
+  opsgenie_api_key: "your-opsgenie-api-key"
+  opsgenie_team_id: "your-team-id"
+
+  # Discord
+  discord_enabled: false
+  discord_webhook_url: "https://discord.com/api/webhooks/..."
+
+  # Mattermost
+  mattermost_enabled: false
+  mattermost_webhook_url: "https://mattermost.example.com/hooks/..."
+  mattermost_username: "K3s-Sentinel"
+
+  # Webex
+  webex_enabled: false
+  webex_webhook_url: "https://api.ciscospark.com/v1/webhooks/incoming/..."
+
+  # SMS (Twilio)
+  sms_enabled: false
+  sms_twilio_account_sid: "your-account-sid"
+  sms_twilio_auth_token: "your-auth-token"
+  sms_twilio_from_number: "+1234567890"
+  sms_to_numbers:
+    - "+0987654321"
+
+  # Custom alert handlers
+  custom_alerts:
+    - name: "custom-alert"
+      url: "https://custom-alert-service.com/webhook"
+      headers:
+        X-Custom-Header: "value"
+      # template: '{"title": "{{title}}", "message": "{{description}}"}'
+
+# ============================================
+# Agent Settings
+# ============================================
+agent_name: "k3s-sentinel"
+namespace: "sentinel-system"
+
+# K3s connection
+k3s_config_path: "~/.kube/config"
+k3s_context: "default"
+
+# Polling intervals
+poll_interval: 10  # seconds
+log_lines_to_fetch: 100
+correlation_time_window: 300  # seconds
+
+# Resource constraints
+cpu_limit: "500m"
+memory_limit: "512Mi"
+
+# Logging
+log_level: "INFO"
+# log_file: "/var/log/k3s-sentinel.log"
+
+# Vector database (for RAG)
+vector_db_path: "./data/vector_db"
+embedding_model: "sentence-transformers/all-MiniLM-L6-v2"

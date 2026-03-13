@@ -1,0 +1,125 @@
+# Default values for k3s-sentinel
+
+replicaCount: 1
+
+image:
+  repository: k3s-sentinel
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: "sentinel"
+
+rbac:
+  create: true
+  clusterRole: true
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Agent configuration
+agent:
+  # Log level: DEBUG, INFO, WARNING, ERROR
+  logLevel: "INFO"
+
+  # Polling interval in seconds
+  pollInterval: 10
+
+  # Number of log lines to fetch
+  logLinesToFetch: 100
+
+  # Correlation time window in seconds
+  correlationTimeWindow: 300
+
+  # K3s context to use
+  k3sContext: "default"
+
+# LLM Configuration
+llm:
+  # Provider: openai, anthropic, local
+  provider: "openai"
+
+  # Model to use
+  model: "gpt-4"
+
+  # Temperature for LLM responses
+  temperature: 0.7
+
+  # Max tokens for LLM responses
+  maxTokens: 2000
+
+# Vector Database Configuration
+vectorDb:
+  # Type: chroma, qdrant
+  type: "chroma"
+
+  # Path for persistent storage
+  path: "/data/vector_db"
+
+  # Embedding model
+  embeddingModel: "sentence-transformers/all-MiniLM-L6-v2"
+
+# Alerting Configuration
+alerts:
+  enabled: true
+
+  # Webhook URL for alerts
+  webhookUrl: ""
+
+  # Slack configuration
+  slack:
+    enabled: false
+    webhookUrl: ""
+
+  # Email configuration
+  email:
+    enabled: false
+    smtpHost: ""
+    smtpPort: 587
+    from: ""
+    to: []
+
+# Monitoring
+monitoring:
+  enabled: true
+  port: 8080
+
+# Persistence
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 1Gi

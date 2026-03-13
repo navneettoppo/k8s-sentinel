@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "k3s-sentinel.fullname" . }}
+  labels:
+    {{- include "k3s-sentinel.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "k3s-sentinel.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "k3s-sentinel.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "k3s-sentinel.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: sentinel
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          env:
+            - name: LOG_LEVEL
+              value: "{{ .Values.agent.logLevel }}"
+            - name: LLM_PROVIDER
+              value: "{{ .Values.llm.provider }}"
+            - name: LLM_MODEL
+              value: "{{ .Values.llm.model }}"
+            {{- if .Values.llm.apiKey }}
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "k3s-sentinel.fullname" . }}-secrets
+                  key: llm-api-key
+            {{- end }}
+            {{- if .Values.alerts.webhookUrl }}
+            - name: ALERT_WEBHOOK_URL
+              value: "{{ .Values.alerts.webhookUrl }}"
+            {{- end }}
+            {{- if and .Values.alerts.slack.enabled .Values.alerts.slack.webhookUrl }}
+            - name: SLACK_WEBHOOK_URL
+              value: "{{ .Values.alerts.slack.webhookUrl }}"
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /root/.kube
+              readOnly: true
+            {{- if .Values.persistence.enabled }}
+            - name: data
+              mountPath: /data
+            {{- end }}
+      volumes:
+        - name: kubeconfig
+          secret:
+            secretName: {{ .Values.kubeconfig.secretName | default "sentinel-kubeconfig" }}
+            optional: true
+        {{- if .Values.persistence.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "k3s-sentinel.fullname" . }}-data
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

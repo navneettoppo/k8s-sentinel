@@ -1,0 +1,39 @@
+# K3s-Sentinel
+
+*.pyc
+__pycache__/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Data
+data/
+*.db
+*.sqlite
+
+# Logs
+logs/
+*.log
+
+# Environment
+.env
+.env.local
+
+# Kubernetes
+kubeconfig
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/

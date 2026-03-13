@@ -1,0 +1,15 @@
+apiVersion: v2
+name: k3s-sentinel
+description: AI Agent for K3s Cluster Root Cause Analysis
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - k3s
+  - kubernetes
+  - ai
+  - root-cause-analysis
+  - observability
+maintainers:
+  - name: K3s-Sentinel Team
+    email: team@k3s-sentinel.io
