@@ -1,0 +1,378 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Box, Container, Flex, Heading, Text, Badge, Button, Tabs, TabList, TabPanels, Tab, TabPanel,
+  Table, Thead, Tbody, Tr, Th, Td, Stat, StatLabel, StatNumber,
+  Grid, Card, CardHeader, CardBody, useToast, Spinner,
+  Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalCloseButton, ModalFooter,
+  useDisclosure, Code, Alert, AlertIcon, HStack, VStack, Select, FormControl, FormLabel,
+  Switch, Textarea, Divider, NumberInput, NumberInputField, NumberInputStepper,
+  NumberIncrementStepper, NumberDecrementStepper
+} from '@chakra-ui/react';
+import axios from 'axios';
+
+const API_BASE = 'http://localhost:8000/api';
+
+function App() {
+  const [stats, setStats] = useState({ nodes: 0, pods: 0, alerts: 0, events: 0 });
+  const [activeTab, setActiveTab] = useState(0);
+  const [data, setData] = useState({ nodes: [], pods: [], configmaps: [], secrets: [], serviceaccounts: [], events: [], cronjobs: [], jobs: [] });
+  const [loading, setLoading] = useState(true);
+  const [selectedPod, setSelectedPod] = useState(null);
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const { isOpen: isLLMOpen, onOpen: onLLMOpen, onClose: onLLMClose } = useDisclosure();
+  const toast = useToast();
+
+  const [llmConfig, setLlmConfig] = useState({ enabled: false, provider: 'openai', model: 'gpt-4' });
+  const [providers, setProviders] = useState([]);
+  const [llmLoading, setLlmLoading] = useState(false);
+  const [llmResult, setLlmResult] = useState('');
+  const [llmPrompt, setLlmPrompt] = useState('');
+  const [temperature, setTemperature] = useState(0.7);
+
+  const resourceTabs = [
+    { key: 'nodes', label: 'Nodes', endpoint: '/nodes' },
+    { key: 'pods', label: 'Pods', endpoint: '/pods' },
+    { key: 'configmaps', label: 'ConfigMaps', endpoint: '/configmaps' },
+    { key: 'secrets', label: 'Secrets', endpoint: '/secrets' },
+    { key: 'serviceaccounts', label: 'ServiceAccounts', endpoint: '/serviceaccounts' },
+    { key: 'events', label: 'Events', endpoint: '/events' },
+    { key: 'cronjobs', label: 'CronJobs', endpoint: '/cronjobs' },
+    { key: 'jobs', label: 'Jobs', endpoint: '/jobs' }
+  ];
+
+  useEffect(() => {
+    fetchStats();
+    fetchData();
+    fetchLLMConfig();
+    const interval = setInterval(fetchStats, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab >= 0 && activeTab < resourceTabs.length) {
+      fetchResource(resourceTabs[activeTab].key, resourceTabs[activeTab].endpoint);
+    }
+  }, [activeTab]);
+
+  const fetchStats = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/stats`);
+      setStats({ ...res.data, events: res.data.alerts || 0 });
+    } catch (e) { console.error('Stats error:', e); }
+  };
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [nodes, pods, events] = await Promise.all([
+        axios.get(`${API_BASE}/nodes`),
+        axios.get(`${API_BASE}/pods`),
+        axios.get(`${API_BASE}/events`)
+      ]);
+      setData({ nodes: nodes.data.nodes || [], pods: pods.data.pods || [], events: events.data.events || [] });
+    } catch (e) {
+      toast({ title: 'Error loading data', status: 'error', duration: 3000 });
+    }
+    setLoading(false);
+  };
+
+  const fetchResource = async (key, endpoint) => {
+    try {
+      const res = await axios.get(`${API_BASE}${endpoint}`);
+      setData(prev => ({ ...prev, [key]: res.data[key] || [] }));
+    } catch (e) { console.error(`Error fetching ${key}:`, e); }
+  };
+
+  const fetchLLMConfig = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/llm/providers`);
+      setProviders(res.data.providers || []);
+      setLlmConfig({ enabled: res.data.enabled, provider: res.data.current_provider, model: res.data.current_model });
+    } catch (e) { console.error('Error fetching LLM config:', e); }
+  };
+
+  const updateLLMConfig = async (provider, model) => {
+    try {
+      const res = await axios.post(`${API_BASE}/llm/config`, { provider, model });
+      if (res.data.success) {
+        setLlmConfig({ ...llmConfig, provider, model: res.data.model });
+        toast({ title: 'LLM config updated', status: 'success', duration: 2000 });
+      }
+    } catch (e) {
+      toast({ title: 'Error updating LLM config', status: 'error', duration: 3000 });
+    }
+  };
+
+  const analyzeWithLLM = async () => {
+    if (!llmPrompt.trim()) {
+      toast({ title: 'Please enter a prompt', status: 'warning', duration: 2000 });
+      return;
+    }
+    setLlmLoading(true);
+    setLlmResult('');
+    try {
+      const res = await axios.post(`${API_BASE}/llm/analyze`, { prompt: llmPrompt, temperature });
+      setLlmResult(res.data.text || res.data.error || 'No response');
+    } catch (e) {
+      setLlmResult('Error: ' + (e.response?.data?.error || e.message));
+    }
+    setLlmLoading(false);
+  };
+
+  const viewPodLogs = async (pod, ns) => {
+    setSelectedPod({ name: pod, namespace: ns, logs: 'Loading...' });
+    onOpen();
+    try {
+      const res = await axios.get(`${API_BASE}/pods/${ns}/${pod}/logs`);
+      setSelectedPod(prev => ({ ...prev, logs: res.data.logs?.join('\n') || 'No logs' }));
+    } catch (e) {
+      setSelectedPod(prev => ({ ...prev, logs: 'Error fetching logs' }));
+    }
+  };
+
+  const exportPDF = () => {
+    window.open(`${API_BASE}/export/pdf`, '_blank');
+    toast({ title: 'PDF exported', status: 'success', duration: 2000 });
+  };
+
+  const scanCluster = async () => {
+    toast({ title: 'Scanning cluster...', status: 'info', duration: 2000 });
+    try {
+      await axios.post(`${API_BASE}/actions/scan`);
+      fetchData();
+      toast({ title: 'Scan complete', status: 'success', duration: 2000 });
+    } catch (e) {
+      toast({ title: 'Scan failed', status: 'error', duration: 2000 });
+    }
+  };
+
+  const getStatusColor = (status) => {
+    const s = (status || '').toLowerCase();
+    if (s === 'ready' || s === 'running' || s === 'bound') return 'green';
+    if (s === 'pending' || s === 'waiting') return 'yellow';
+    if (s === 'notready' || s === 'failed' || s === 'error') return 'red';
+    return 'gray';
+  };
+
+  const renderTable = (items, columns) => (
+    <Table variant="simple" size="sm">
+      <Thead><Tr>{columns.map(c => <Th key={c.key}>{c.label}</Th>)}</Tr></Thead>
+      <Tbody>
+        {items.map((item, i) => (
+          <Tr key={i}>
+            {columns.map(c => (
+              <Td key={c.key}>{c.render ? c.render(item[c.key], item) : item[c.key]}</Td>
+            ))}
+          </Tr>
+        ))}
+      </Tbody>
+    </Table>
+  );
+
+  return (
+    <Box minH="100vh" bg="gray.900" color="white">
+      <Box bg="gray.800" borderBottom="1px" borderColor="gray.700" py={4} px={8} position="sticky" top={0} zIndex={10}>
+        <Flex justify="space-between" align="center">
+          <HStack spacing={3}>
+            <Box bg="blue.500" p={2} borderRadius="md"><Text fontSize="xl">🛡️</Text></Box>
+            <Heading size="md">K3s Sentinel</Heading>
+          </HStack>
+          <HStack spacing={4}>
+            <Badge colorScheme={loading ? 'yellow' : 'green'} p={2} borderRadius="md">
+              {loading ? 'Connecting...' : 'Connected'}
+            </Badge>
+            <Button colorScheme="purple" size="sm" onClick={onLLMOpen}>🤖 LLM Config</Button>
+          </HStack>
+        </Flex>
+      </Box>
+
+      <Container maxW="container.xl" py={6}>
+        <Grid templateColumns={{ base: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' }} gap={4} mb={6}>
+          {[
+            { label: 'Nodes', value: stats.nodes, color: 'blue' },
+            { label: 'Pods', value: stats.pods, color: 'green' },
+            { label: 'Alerts', value: stats.alerts, color: 'red' },
+            { label: 'Events', value: stats.events, color: 'yellow' },
+            { label: 'LLM', value: llmConfig.enabled ? llmConfig.provider : 'Off', color: llmConfig.enabled ? 'purple' : 'gray' }
+          ].map((stat, i) => (
+            <Card key={i} bg="gray.800" borderColor="gray.700">
+              <CardBody>
+                <Stat>
+                  <StatLabel color="gray.400">{stat.label}</StatLabel>
+                  <StatNumber color={`${stat.color}.400`}>{stat.value}</StatNumber>
+                </Stat>
+              </CardBody>
+            </Card>
+          ))}
+        </Grid>
+
+        <Card bg="gray.800" borderColor="gray.700" mb={6}>
+          <CardBody p={0}>
+            <Tabs index={activeTab} onChange={setActiveTab} colorScheme="blue" variant="enclosed">
+              <TabList bg="gray.900" px={4} pt={4}>
+                {resourceTabs.map((tab, i) => (
+                  <Tab key={tab.key} _selected={{ color: 'blue.400', borderColor: 'blue.400' }}>{tab.label}</Tab>
+                ))}
+              </TabList>
+              <TabPanels>
+                {resourceTabs.map((tab, i) => (
+                  <TabPanel key={tab.key}>
+                    {loading && activeTab === i ? (
+                      <Flex justify="center" py={10}><Spinner size="lg" color="blue.500" /></Flex>
+                    ) : renderTable(data[tab.key] || [], getColumns(tab.key))}
+                  </TabPanel>
+                ))}
+              </TabPanels>
+            </Tabs>
+          </CardBody>
+        </Card>
+
+        <Grid templateColumns={{ base: '1fr', lg: '2fr 1fr' }} gap={6}>
+          <Card bg="gray.800" borderColor="gray.700">
+            <CardHeader><Heading size="sm">Recent Alerts</Heading></CardHeader>
+            <CardBody pt={0}>
+              <VStack spacing={2} align="stretch">
+                {data.events.slice(0, 5).map((event, i) => (
+                  <Alert key={i} status={event.type === 'Warning' ? 'warning' : 'info'} borderRadius="md">
+                    <AlertIcon />
+                    <Box flex="1">
+                      <Text fontWeight="bold" fontSize="sm">{event.reason}</Text>
+                      <Text fontSize="xs" color="gray.400">{event.involved_object} - {event.message?.slice(0, 50)}</Text>
+                    </Box>
+                    <Badge colorScheme={event.type === 'Warning' ? 'yellow' : 'blue'}>{event.type}</Badge>
+                  </Alert>
+                ))}
+              </VStack>
+            </CardBody>
+          </Card>
+
+          <Card bg="gray.800" borderColor="gray.700">
+            <CardHeader><Heading size="sm">Quick Actions</Heading></CardHeader>
+            <CardBody>
+              <VStack spacing={3}>
+                <Button w="full" colorScheme="blue" onClick={scanCluster}>🔍 Scan Cluster</Button>
+                <Button w="full" colorScheme="yellow" onClick={() => { axios.post(`${API_BASE}/actions/clear-cache`); toast({ title: 'Cache cleared', status: 'info' }); }}>
+                  🗑️ Clear Cache
+                </Button>
+                <Button w="full" colorScheme="purple" onClick={exportPDF}>📄 Export PDF</Button>
+                <Button w="full" colorScheme="gray" onClick={() => window.open(`${API_BASE}/health`)}>❤️ Health Check</Button>
+              </VStack>
+            </CardBody>
+          </Card>
+        </Grid>
+      </Container>
+
+      <Modal isOpen={isOpen} onClose={onClose} size="xl">
+        <ModalOverlay />
+        <ModalContent bg="gray.800" color="white">
+          <ModalHeader>Pod Logs: {selectedPod?.name}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            <Code display="block" whiteSpace="pre" bg="gray.900" p={4} borderRadius="md" maxH="400px" overflowY="auto">
+              {selectedPod?.logs}
+            </Code>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={isLLMOpen} onClose={onLLMClose} size="xl">
+        <ModalOverlay />
+        <ModalContent bg="gray.800" color="white">
+          <ModalHeader>🤖 LLM Configuration</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack spacing={6} align="stretch">
+              <FormControl display="flex" alignItems="center">
+                <FormLabel mb="0">Enable LLM Analysis</FormLabel>
+                <Switch colorScheme="purple" isChecked={llmConfig.enabled} 
+                  onChange={(e) => setLlmConfig({...llmConfig, enabled: e.target.checked})} />
+              </FormControl>
+              <Divider />
+              <FormControl>
+                <FormLabel>Provider</FormLabel>
+                <Select value={llmConfig.provider} onChange={(e) => setLlmConfig({...llmConfig, provider: e.target.value})}>
+                  {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </Select>
+              </FormControl>
+              <FormControl>
+                <FormLabel>Model</FormLabel>
+                <Select value={llmConfig.model} onChange={(e) => setLlmConfig({...llmConfig, model: e.target.value})}>
+                  {providers.find(p => p.id === llmConfig.provider)?.models.map(m => <option key={m} value={m}>{m}</option>)}
+                </Select>
+              </FormControl>
+              <Button colorScheme="purple" onClick={() => updateLLMConfig(llmConfig.provider, llmConfig.model)}>
+                Save Configuration
+              </Button>
+              <Divider />
+              <Box>
+                <FormLabel>Test LLM Analysis</FormLabel>
+                <Textarea value={llmPrompt} onChange={(e) => setLlmPrompt(e.target.value)}
+                  placeholder="Enter your analysis prompt..." rows={4} bg="gray.700" />
+                <HStack mt={2}>
+                  <FormLabel mb="0" fontSize="sm">Temperature:</FormLabel>
+                  <NumberInput value={temperature} min={0} max={1} step={0.1} size="sm" w="100px" 
+                    onChange={(v) => setTemperature(parseFloat(v))}>
+                    <NumberInputField bg="gray.700" />
+                    <NumberInputStepper>
+                      <NumberIncrementStepper /><NumberDecrementStepper />
+                    </NumberInputStepper>
+                  </NumberInput>
+                  <Button colorScheme="purple" onClick={analyzeWithLLM} isLoading={llmLoading} flex={1}>Analyze</Button>
+                </HStack>
+              </Box>
+              {llmResult && (
+                <Box>
+                  <FormLabel>Analysis Result</FormLabel>
+                  <Code display="block" whiteSpace="pre-wrap" bg="gray.900" p={4} borderRadius="md" maxH="300px" overflowY="auto">
+                    {llmResult}
+                  </Code>
+                </Box>
+              )}
+            </VStack>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+    </Box>
+  );
+}
+
+const getColumns = (key) => {
+  const columns = {
+    nodes: [
+      { key: 'name', label: 'Name' },
+      { key: 'status', label: 'Status', render: v => <Badge colorScheme={v === 'Ready' ? 'green' : 'red'}>{v}</Badge> },
+      { key: 'roles', label: 'Roles', render: v => v?.join(', ') },
+      { key: 'cpu', label: 'CPU' },
+      { key: 'memory', label: 'Memory' }
+    ],
+    pods: [
+      { key: 'name', label: 'Name' },
+      { key: 'namespace', label: 'Namespace' },
+      { key: 'status', label: 'Status', render: v => <Badge colorScheme={v === 'Running' ? 'green' : 'yellow'}>{v}</Badge> },
+      { key: 'ready', label: 'Ready' },
+      { key: 'restarts', label: 'Restarts' },
+      { key: 'actions', label: '', render: (_, item) => <Button size="xs" onClick={() => viewPodLogs(item.name, item.namespace)}>Logs</Button> }
+    ],
+    configmaps: [{ key: 'name', label: 'Name' }, { key: 'namespace', label: 'Namespace' }, { key: 'keys', label: 'Keys', render: v => v?.join(', ') }, { key: 'age', label: 'Age' }],
+    secrets: [{ key: 'name', label: 'Name' }, { key: 'namespace', label: 'Namespace' }, { key: 'type', label: 'Type' }, { key: 'age', label: 'Age' }],
+    serviceaccounts: [{ key: 'name', label: 'Name' }, { key: 'namespace', label: 'Namespace' }, { key: 'automount', label: 'Automount', render: v => v ? 'Yes' : 'No' }, { key: 'age', label: 'Age' }],
+    events: [
+      { key: 'type', label: 'Type', render: v => <Badge colorScheme={v === 'Warning' ? 'yellow' : 'blue'}>{v}</Badge> },
+      { key: 'reason', label: 'Reason' },
+      { key: 'involved_object', label: 'Object' },
+      { key: 'message', label: 'Message', render: v => <Text noOfLines={1}>{v}</Text> },
+      { key: 'timestamp', label: 'Time' }
+    ],
+    cronjobs: [
+      { key: 'name', label: 'Name' },
+      { key: 'namespace', label: 'Namespace' },
+      { key: 'schedule', label: 'Schedule' },
+      { key: 'suspend', label: 'Suspend', render: v => <Badge colorScheme={v ? 'red' : 'green'}>{v ? 'Yes' : 'No'}</Badge> },
+      { key: 'active', label: 'Active' }
+    ],
+    jobs: [{ key: 'name', label: 'Name' }, { key: 'namespace', label: 'Namespace' }, { key: 'succeeded', label: 'Succeeded' }, { key: 'failed', label: 'Failed' }, { key: 'age', label: 'Age' }]
+  };
+  return columns[key] || [];
+};
+
+export default App;
