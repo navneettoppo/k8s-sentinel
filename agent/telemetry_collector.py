@@ -421,3 +421,72 @@ class TelemetryCollector:
             self.logger.error(f"Error fetching resource relationships: {e}")
 
         return relationships
+
+    async def get_nodes(self) -> List[Dict[str, Any]]:
+        """Get cluster nodes for dashboard."""
+        nodes = []
+        try:
+            for node in self.core_v1.list_node().items:
+                # Get node conditions
+                conditions = {}
+                for c in (node.status.conditions or []):
+                    conditions[c.type] = c.status
+
+                # Determine status
+                status = "Ready"
+                if conditions.get("Ready") == "False":
+                    status = "NotReady"
+                elif conditions.get("MemoryPressure") == "True":
+                    status = "MemoryPressure"
+                elif conditions.get("DiskPressure") == "True":
+                    status = "DiskPressure"
+
+                # Get roles (from labels)
+                roles = []
+                for key in (node.metadata.labels or {}):
+                    if key.startswith("node-role.kubernetes.io/"):
+                        roles.append(key.split("/")[-1])
+                    elif key in ["node-role.kubernetes.io/master", "kubernetes.io/role"]:
+                        roles.append("master")
+
+                nodes.append({
+                    "name": node.metadata.name,
+                    "status": status,
+                    "roles": roles,
+                    "cpu": "N/A",
+                    "memory": "N/A",
+                    "cpu_usage": 0,
+                    "memory_usage": 0
+                })
+        except ApiException as e:
+            self.logger.error(f"Error fetching nodes: {e}")
+        return nodes
+
+    async def get_pods(self, namespace: str = None) -> List[Dict[str, Any]]:
+        """Get cluster pods for dashboard."""
+        pods = []
+        try:
+            if namespace:
+                pod_list = self.core_v1.list_namespaced_pod(namespace)
+            else:
+                pod_list = self.core_v1.list_pod_for_all_namespaces()
+
+            for pod in pod_list.items:
+                # Calculate ready status
+                ready = "0/0"
+                if pod.status.container_statuses:
+                    total = len(pod.status.container_statuses)
+                    ready_count = sum(1 for cs in pod.status.container_statuses if cs.ready)
+                    ready = f"{ready_count}/{total}"
+
+                pods.append({
+                    "name": pod.metadata.name,
+                    "namespace": pod.metadata.namespace,
+                    "status": pod.status.phase,
+                    "ready": ready,
+                    "restarts": sum((cs.restart_count for cs in (pod.status.container_statuses or [])), 0),
+                    "age": str(pod.status.start_time or datetime.now() - pod.metadata.creation_timestamp)
+                })
+        except ApiException as e:
+            self.logger.error(f"Error fetching pods: {e}")
+        return pods
