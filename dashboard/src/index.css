@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+    /* Dribbble-inspired color variables */
+    --background: 0 0% 2%;         /* #030303 - very dark */
+    --foreground: 0 0% 98%;         /* #FAFAFA - off-white */
+    --card: 0 0% 4%;               /* #0a0a0a */
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 4%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 100 33% 54%;        /* #8EC060 - green */
+    --primary-foreground: 0 0% 2%;
+    --secondary: 225 100% 45%;      /* #0F3DDE - blue */
+    --secondary-foreground: 0 0% 98%;
+    --accent: 18 100% 50%;         /* #F95106 - orange */
+    --accent-foreground: 0 0% 98%;
+    --muted: 0 0% 10%;             /* #1a1a1a */
+    --muted-foreground: 0 0% 54%;  /* #8a8a8a */
+    --destructive: 0 84% 60%;       /* red */
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 15%;            /* #262626 */
+    --input: 0 0% 10%;
+    --ring: 100 33% 54%;
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3a;
+}
+
+/* Selection */
+::selection {
+  background: rgba(142, 192, 96, 0.3);
+  color: #FAFAFA;
+}
+
+/* Focus visible */
+:focus-visible {
+  outline: 2px solid #8EC060;
+  outline-offset: 2px;
+}
+
+/* Glow effects */
+.glow-green {
+  box-shadow: 0 0 20px rgba(142, 192, 96, 0.3);
+}
+
+.glow-orange {
+  box-shadow: 0 0 20px rgba(249, 81, 6, 0.3);
+}
+
+.glow-blue {
+  box-shadow: 0 0 20px rgba(15, 61, 222, 0.3);
+}
+
+/* Animations */
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Card hover effect */
+.card-hover {
+  @apply transition-all duration-300;
+}
+
+.card-hover:hover {
+  @apply -translate-y-1;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* Status indicators */
+.status-ready {
+  @apply bg-[#8EC060];
+  box-shadow: 0 0 8px rgba(142, 192, 96, 0.5);
+}
+
+.status-error {
+  @apply bg-[#F95106];
+  box-shadow: 0 0 8px rgba(249, 81, 6, 0.5);
+}
+
+.status-warning {
+  @apply bg-[#F59E0B];
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+}
+
+/* Gradient backgrounds */
+.gradient-surface {
+  background: linear-gradient(135deg, #030303 0%, #0a0a0a 100%);
+}
+
+.gradient-card {
+  background: linear-gradient(145deg, #0a0a0a 0%, #080808 100%);
+}
+
+/* Grid pattern */
+.grid-pattern {
+  background-image:
+    linear-gradient(rgba(26, 26, 26, 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26, 26, 26, 0.3) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
