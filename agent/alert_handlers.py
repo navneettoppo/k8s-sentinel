@@ -873,28 +873,6 @@ Suggested Fix: {result.suggested_fix}
             severity=result.severity
         )
 
-    async def get_recent_alerts(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """Get recent alerts for dashboard."""
-        alerts = []
-        for alert_key, timestamp in list(self.alert_history.items())[:limit]:
-            # Get priority from alert_key (simplified)
-            severity = "warning"
-            if "critical" in alert_key.lower():
-                severity = "critical"
-            elif "error" in alert_key.lower():
-                severity = "error"
-
-            alerts.append({
-                "id": alert_key[:8],
-                "title": alert_key.split(":")[0] if ":" in alert_key else alert_key,
-                "severity": severity,
-                "resource": alert_key.split(":")[0] if ":" in alert_key else "unknown",
-                "message": f"Alert triggered at {timestamp.isoformat()}",
-                "timestamp": timestamp.isoformat(),
-                "resolved": False
-            })
-        return sorted(alerts, key=lambda x: x["timestamp"], reverse=True)
-
     async def close(self):
         """Cleanup all handlers."""
         for handler in self.handlers:

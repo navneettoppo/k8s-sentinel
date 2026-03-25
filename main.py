@@ -8,7 +8,7 @@ import asyncio
 import logging
 import signal
 import sys
-import uuid
+import argparse
 from typing import Optional
 from pathlib import Path
 
@@ -16,13 +16,50 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from agent.telemetry_collector import TelemetryCollector
-from agent.context_engine import ContextEngine, IncidentRecord
+from agent.context_engine import ContextEngine
 from agent.analysis_core import AnalysisCore
 from agent.alert_handlers import AlertDispatcher
 from config.settings import Settings
-from agent.api import app
-import agent.api
-import uvicorn
+
+
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        prog="k3s-sentinel",
+        description="K3s-Sentinel - AI Agent for K3s Cluster Root Cause Analysis"
+    )
+
+    parser.add_argument(
+        "--kubeconfig", "-k",
+        metavar="PATH",
+        help="Path to kubeconfig file"
+    )
+
+    parser.add_argument(
+        "--tui", "-t",
+        action="store_true",
+        help="Start the full TUI interface"
+    )
+
+    parser.add_argument(
+        "--api",
+        action="store_true",
+        help="Start API server only"
+    )
+
+    parser.add_argument(
+        "--context", "-c",
+        metavar="NAME",
+        help="Kubernetes context to use"
+    )
+
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging"
+    )
+
+    return parser.parse_args()
 
 
 class K3sSentinelAgent:
@@ -46,9 +83,6 @@ class K3sSentinelAgent:
 
         self.is_running = False
         self._setup_logging()
-        
-        # Link agent instance to API
-        agent.api.agent_instance = self
 
     def _setup_logging(self):
         """Configure logging for the agent."""
@@ -85,12 +119,6 @@ class K3sSentinelAgent:
             self.alert_dispatcher = AlertDispatcher(self.settings)
             await self.alert_dispatcher.initialize()
 
-            # Start Web API in background
-            self.logger.info("Starting Dashboard API on port 8000...")
-            config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
-            server = uvicorn.Server(config)
-            asyncio.create_task(server.serve())
-
             # Main event loop
             await self._main_loop()
 
@@ -113,24 +141,11 @@ class K3sSentinelAgent:
                     analysis_result = await self.analysis_core.analyze_event(event)
 
                     if analysis_result:
-                        # Record incident in context engine
-                        incident = IncidentRecord(
-                            incident_id=str(uuid.uuid4()),
-                            timestamp=analysis_result.timestamp,
-                            symptoms=[analysis_result.symptom_type.value],
-                            root_cause=analysis_result.root_cause,
-                            resolution=analysis_result.suggested_fix,
-                            affected_resources=[analysis_result.affected_resource],
-                            log_snippets=analysis_result.evidence
-                        )
-                        self.context_engine.add_incident(incident)
-
                         # Dispatch alert if root cause identified
                         await self.alert_dispatcher.dispatch(analysis_result)
 
                 # Update topology graph periodically
-                relationships = await self.telemetry_collector.get_resource_relationships()
-                await self.context_engine.update_topology(relationships)
+                await self.context_engine.update_topology()
 
                 # Wait before next iteration
                 await asyncio.sleep(self.settings.poll_interval)
@@ -164,8 +179,8 @@ class K3sSentinelAgent:
         asyncio.create_task(self.stop())
 
 
-async def main():
-    """Main entry point for the K3s-Sentinel agent."""
+async def run_agent():
+    """Run the K3s-Sentinel agent."""
     agent = K3sSentinelAgent()
 
     # Setup signal handlers
@@ -181,5 +196,57 @@ async def main():
         sys.exit(1)
 
 
+def run_tui(kubeconfig_path: Optional[str] = None):
+    """Run the TUI interface."""
+    try:
+        from tui import K3sSentinelTUI
+        app = K3sSentinelTUI(kubeconfig_path=kubeconfig_path)
+        app.run()
+    except ImportError as e:
+        print(f"Error: TUI not available: {e}", file=sys.stderr)
+        print("Make sure textual is installed: pip install textual", file=sys.stderr)
+        sys.exit(1)
+
+
+def run_api_server(kubeconfig_path: Optional[str] = None):
+    """Run the API server."""
+    import uvicorn
+    from api_server import app, load_kubeconfig
+
+    if kubeconfig_path:
+        load_kubeconfig(kubeconfig_path)
+        print(f"Using kubeconfig: {kubeconfig_path}")
+
+    print("Starting API server on http://0.0.0.0:8000")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+def main():
+    """Main entry point for K3s-Sentinel."""
+    args = parse_args()
+
+    # Configure logging
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+
+    # Import config manager for path resolution
+    from config_manager import resolve_kubeconfig_path
+
+    # Resolve kubeconfig path
+    kubeconfig_path = resolve_kubeconfig_path(args.kubeconfig)
+
+    if args.tui:
+        # Run TUI
+        run_tui(kubeconfig_path)
+    elif args.api:
+        # Run API server only
+        run_api_server(kubeconfig_path)
+    else:
+        # Default: run the AI agent
+        asyncio.run(run_agent())
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
